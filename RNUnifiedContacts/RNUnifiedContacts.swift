@@ -114,6 +114,35 @@ class RNUnifiedContacts: NSObject {
         }
     }
 
+    @objc func getContactsWithIdentifiers(_ identifiers: [String], callback: (NSArray) -> ()) -> Void {
+      let contactStore = CNContactStore()
+      do {
+        var cNContacts = [CNContact]()
+
+        let predicate = CNContact.predicateForContacts(withIdentifiers: identifiers)
+        let fetchRequest = CNContactFetchRequest(keysToFetch: keysToFetch as [CNKeyDescriptor])
+
+        fetchRequest.predicate = predicate
+        fetchRequest.sortOrder = CNContactSortOrder.userDefault
+
+        try contactStore.enumerateContacts(with: fetchRequest) { (cNContact, pointer) -> Void in
+          cNContacts.append(cNContact)
+        }
+
+        var contacts = [NSDictionary]();
+        for cNContact in cNContacts {
+          contacts.append( convertCNContactToDictionary(cNContact) )
+        }
+
+        callback([NSNull(), contacts])
+      } catch let error as NSError {
+        NSLog("Problem getting contacts.")
+        NSLog(error.localizedDescription)
+
+        callback([error.localizedDescription, NSNull()])
+      }
+    }
+
     @objc func getGroups(_ callback: (NSArray) -> ()) -> Void {
         let contactStore = CNContactStore()
         do {
