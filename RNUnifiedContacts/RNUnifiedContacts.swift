@@ -109,7 +109,7 @@ class RNUnifiedContacts: NSObject {
     //   possibility.
     //
     @objc func getContacts(_ callback: (NSObject) -> ()) -> Void {
-        searchContacts(nil) { (result: NSObject) in
+        searchContacts(nil, options: nil) { (result: NSObject) in
             callback(result)
         }
     }
@@ -164,12 +164,23 @@ class RNUnifiedContacts: NSObject {
       }
     }
 
-    @objc func searchContacts(_ searchText: String?, callback: (NSArray) -> ()) -> Void {
+    @objc func searchContacts(_ searchText: String?, options: NSDictionary?, callback: (NSArray) -> ()) -> Void {
         let contactStore = CNContactStore()
         do {
             var cNContacts = [CNContact]()
 
             let fetchRequest = CNContactFetchRequest(keysToFetch: keysToFetch as [CNKeyDescriptor])
+
+            if options != nil {
+              let mutableOptions = options!.mutableCopy() as! NSMutableDictionary
+
+              if (mutableOptions["inGroup"] != nil) {
+                let identifier = mutableOptions["inGroup"] as! String
+                let predicate = CNContact.predicateForContactsInGroup(withIdentifier: identifier)
+
+                fetchRequest.predicate = predicate
+              }
+            }
 
             fetchRequest.sortOrder = CNContactSortOrder.givenName
 
@@ -191,6 +202,35 @@ class RNUnifiedContacts: NSObject {
             }
 
             callback([NSNull(), contacts])
+        } catch let error as NSError {
+            NSLog("Problem getting contacts.")
+            NSLog(error.localizedDescription)
+
+            callback([error.localizedDescription, NSNull()])
+        }
+    }
+
+    @objc func searchGroups(_ searchText: String?, callback: (NSArray) -> ()) -> Void {
+        let contactStore = CNContactStore()
+        do {
+          var cNGroups = [CNGroup]()
+
+          try cNGroups = contactStore.groups(matching: nil)
+
+          var groups = [NSDictionary]();
+          for cNGroup in cNGroups {
+            if searchText == nil {
+                // Add all Contacts if no searchText is provided.
+                groups.append( convertCNGroupToDictionary(cNGroup) )
+            } else {
+                // If the Contact contains the search string then add it.
+                if self.groupContainsText( cNGroup, searchText: searchText! ) {
+                    groups.append( convertCNGroupToDictionary(cNGroup) )
+                }
+            }
+          }
+
+          callback([NSNull(), groups])
         } catch let error as NSError {
             NSLog("Problem getting contacts.")
             NSLog(error.localizedDescription)
@@ -507,6 +547,17 @@ class RNUnifiedContacts: NSObject {
         } else {
             return false
         }
+    }
+
+    func groupContainsText( _ cNGroup: CNGroup, searchText: String ) -> Bool {
+      let searchText   = searchText.lowercased();
+      let textToSearch = cNGroup.name.lowercased()
+
+      if searchText.isEmpty || textToSearch.contains(searchText) {
+        return true
+      } else {
+        return false
+      }
     }
 
     func getLabeledDict<T>(_ item: CNLabeledValue<T>) -> [String: Any] {
